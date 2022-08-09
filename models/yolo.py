@@ -153,6 +153,7 @@ class Model(nn.Module):
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
+                # input(len(x))
             if profile:
                 self._profile_one_layer(m, x, dt)
             x = m(x)  # run
@@ -234,7 +235,7 @@ class Model(nn.Module):
         self.info()
         return self
 
-    def info(self, verbose=False, img_size=640):  # print model information
+    def info(self, verbose=False, img_size=320):  # print model information
         model_info(self, verbose, img_size)
 
     def _apply(self, fn):
@@ -267,7 +268,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
         n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain
         if m in (Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
                  BottleneckCSP, C3, C3TR, C3SPP, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x, EPConv):
-            c1, c2 = ch[f], args[0]
+            c1, c2 = ch[f if not isinstance(f,list) else f[0]], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
 

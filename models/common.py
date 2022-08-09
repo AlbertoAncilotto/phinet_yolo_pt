@@ -80,27 +80,31 @@ class Conv(nn.Module):
 
 class EPConv(nn.Module):
     # EPNET convolution
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, compression=4, pool=None, act=True, attention=False, attention_k=1, batchnorm=False, dropout_rate=0.25, skip_tensor_in=None, skip_k=1, skip_channels=1, out_res=1):  # ch_in, ch_out, kernel, stride, padding, groups
+    def __init__(self, c1, c2, k=3, s=1, p=None, g=1, compression=4, pool=None, act=True, attention=True, attention_k=3, attention_lite=True, batchnorm=True, dropout_rate=0, skip_tensor_in=None, skip_k=1, skip_channels=1, out_ratio=1):  # ch_in, ch_out, kernel, stride, padding, groups
         super().__init__()
         print(F'conf- c1={c1}, c2={c2}, k={k}, s={s}, g={g}')
         self.compression = compression
         self.attention = attention
+        self.attention_lite = attention_lite
+        self.attention_lite_ch_in = c2//compression
         self.pool = pool
         self.batchnorm = batchnorm
         self.dropout_rate = dropout_rate
 
         self.compression_conv = nn.Conv2d(c1, c2//compression, 1, 1,  groups=g, padding='same', bias=False)
-        self.main_conv = nn.Conv2d(c2//compression if compression>1 else c1, c2, k, s,  groups=g, padding=autopad(k, p), bias=False)
+        self.main_conv = nn.Conv2d(c2//compression if compression>1 else c1, c2, k, s,  groups=g, padding='same' if s==1 else autopad(k, p), bias=False)
         self.act = nn.SiLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
         
         if attention:
-            self.att_conv = nn.Conv2d(c2, c2, attention_k, 1, groups=g, padding='same', bias=False)
-            self.att_act = nn.functional.sigmoid()
+            if attention_lite:
+                self.att_pw_conv= nn.Conv2d(c2, self.attention_lite_ch_in, 1, 1, groups=g, padding='same', bias=False)
+            self.att_conv = nn.Conv2d(c2 if not attention_lite else self.attention_lite_ch_in, c2, attention_k, 1, groups=g, padding='same', bias=False)
+            self.att_act = nn.Sigmoid()
 
         if pool:
             self.mp = nn.MaxPool2d(pool)
         if skip_tensor_in:
-            self.ap = nn.AdaptiveAvgPool2d(out_res)
+            self.ap = nn.AvgPool2d(out_ratio)
             self.skip_conv = nn.Conv2d(skip_channels, c2//compression, skip_k, 1,  groups=g, padding='same', bias=False)
         if batchnorm:
             self.bn = nn.BatchNorm2d(c2)
@@ -113,7 +117,9 @@ class EPConv(nn.Module):
         s = None
         # skip connection
         if isinstance(x, list):
+
             skip_tensor_in = x[1]
+            # print(torch.std_mean(skip_tensor_in), torch.std_mean(x[0]))
             x = x[0]
             s = self.ap(skip_tensor_in)
             s = self.skip_conv(s)
@@ -121,22 +127,30 @@ class EPConv(nn.Module):
         # compression convolution
         if self.compression > 1:
             x = self.compression_conv(x)
-            if s is not None:
-                x = x+s
-
-        # main conv and activation
-        x = self.act(self.main_conv(x))
-
-        # attention conv
-        if self.attention:
-            x += self.att_act(self.att_conv(x))
+            
+        if s is not None:
+            x = x+s
 
         if self.pool:
             x = self.mp(x)
-        if self.dropout_rate > 0:
-            x = self.do(x)
+        # main conv and activation
+        x = self.main_conv(x)
         if self.batchnorm:
             x = self.bn(x)
+        x = self.act(x)
+
+        # attention conv
+        if self.attention:
+            if self.attention_lite:
+                att_in=self.att_pw_conv(x)
+            else:
+                att_in=x
+            y = self.att_act(self.att_conv(att_in))
+            x = x*y
+
+        
+        if self.dropout_rate > 0:
+            x = self.do(x)
 
         return x
 
@@ -316,7 +330,10 @@ class SPPF(nn.Module):
             warnings.simplefilter('ignore')  # suppress torch 1.9.0 max_pool2d() warning
             y1 = self.m(x)
             y2 = self.m(y1)
-            return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
+            out = self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
+            # print(x.shape, y1.shape,  y2.shape, self.m(y2).shape)
+            # input(out.shape)
+            return out
 
 
 class Focus(nn.Module):

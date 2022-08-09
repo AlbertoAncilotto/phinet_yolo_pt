@@ -288,7 +288,7 @@ def export_saved_model(model,
                        keras=False,
                        prefix=colorstr('TensorFlow SavedModel:')):
     # YOLOv5 TensorFlow SavedModel export
-    try:
+    # try:
         import tensorflow as tf
         from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 
@@ -322,14 +322,15 @@ def export_saved_model(model,
                                 if check_version(tf.__version__, '2.6') else tf.saved_model.SaveOptions())
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return keras_model, f
-    except Exception as e:
-        LOGGER.info(f'\n{prefix} export failure: {e}')
-        return None, None
+    # except Exception as e:
+    #     print(str(e))
+    #     LOGGER.info(f'\n{prefix} export failure: {e}')
+    #     return None, None
 
 
 def export_pb(keras_model, file, prefix=colorstr('TensorFlow GraphDef:')):
     # YOLOv5 TensorFlow GraphDef *.pb export https://github.com/leimao/Frozen_Graph_TensorFlow
-    try:
+    # try:
         import tensorflow as tf
         from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
 
@@ -344,13 +345,14 @@ def export_pb(keras_model, file, prefix=colorstr('TensorFlow GraphDef:')):
 
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return f
-    except Exception as e:
-        LOGGER.info(f'\n{prefix} export failure: {e}')
+    # except Exception as e:
+    #     print(str(e))
+    #     LOGGER.info(f'\n{prefix} export failure: {e}')
 
 
 def export_tflite(keras_model, im, file, int8, data, nms, agnostic_nms, prefix=colorstr('TensorFlow Lite:')):
     # YOLOv5 TensorFlow Lite export
-    try:
+    # try:
         import tensorflow as tf
 
         LOGGER.info(f'\n{prefix} starting export with tensorflow {tf.__version__}...')
@@ -378,8 +380,9 @@ def export_tflite(keras_model, im, file, int8, data, nms, agnostic_nms, prefix=c
         open(f, "wb").write(tflite_model)
         LOGGER.info(f'{prefix} export success, saved as {f} ({file_size(f):.1f} MB)')
         return f
-    except Exception as e:
-        LOGGER.info(f'\n{prefix} export failure: {e}')
+    # except Exception as e:
+    #     print(str(e))
+    #     LOGGER.info(f'\n{prefix} export failure: {e}')
 
 
 def export_edgetpu(file, prefix=colorstr('Edge TPU:')):

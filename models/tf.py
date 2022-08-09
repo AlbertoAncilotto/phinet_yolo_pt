@@ -28,7 +28,7 @@ import torch.nn as nn
 from tensorflow import keras
 
 from models.common import (C3, SPP, SPPF, Bottleneck, BottleneckCSP, C3x, Concat, Conv, CrossConv, DWConv,
-                           DWConvTranspose2d, Focus, autopad)
+                           DWConvTranspose2d, EPConv, Focus, autopad)
 from models.experimental import MixConv2d, attempt_load
 from models.yolo import Detect
 from utils.activations import SiLU
@@ -85,6 +85,85 @@ class TFConv(keras.layers.Layer):
 
     def call(self, inputs):
         return self.act(self.bn(self.conv(inputs)))
+
+
+class TFEPConv(keras.layers.Layer):
+    # EPNET convolution
+    def __init__(self, c1, c2, k=3, s=1, p=None, g=1, compression=4, pool=None, act=True, attention=True, attention_k=3, attention_lite=True, batchnorm=True, dropout_rate=0, skip_tensor_in=None, skip_k=1, skip_channels=1, out_ratio=1, w=None):  # ch_in, ch_out, kernel, stride, padding, groups
+        super().__init__()
+        print(F'conf- c1={c1}, c2={c2}, k={k}, s={s}, g={g}')
+        if g>1:
+            return('Grouped convs not supported')
+        self.compression = compression
+        self.attention = attention
+        self.attention_lite = attention_lite
+        self.attention_lite_ch_in = c2//compression
+        self.pool = pool
+        self.batchnorm = batchnorm
+        self.dropout_rate = dropout_rate
+    
+        self.compression_conv = TFConv2d(c1, c2//compression, 1, 1, padding='same', bias=False, w=w.compression_conv)
+        self.main_conv = TFConv2d(c2//compression if compression>1 else c1, c2, k, s,  groups=g, padding='same' if s==1 else autopad(k, p), bias=False, w=w.main_conv)
+        self.act = activations(w.act) if act else tf.identity
+        
+        if attention:
+            if attention_lite:
+                self.att_pw_conv= TFConv2d(c2, self.attention_lite_ch_in, 1, 1, padding='same', bias=False, w=w.att_pw_conv)
+            self.att_conv = TFConv2d(c2 if not attention_lite else self.attention_lite_ch_in, c2, attention_k, 1, groups=g, padding='same', bias=False, w=w.att_conv)
+            self.att_act = activations(w.att_act) 
+
+        if pool:
+            self.mp = keras.layers.MaxPooling2D(pool_size=(pool, pool))
+        
+        if skip_tensor_in:
+            self.ap = keras.layers.AveragePooling2D(pool_size=(out_ratio, out_ratio))
+            self.skip_conv = TFConv2d(skip_channels, c2//compression, skip_k, 1,  groups=g, padding='same', bias=False, w=w.skip_conv)
+        
+        if batchnorm:
+            self.bn = TFBN(w.bn)
+
+    
+    def call(self, inputs):
+        s = None
+        # skip connection
+        if isinstance(inputs, list):
+
+            skip_tensor_in = inputs[1]
+            # print(torch.std_mean(skip_tensor_in), torch.std_mean(x[0]))
+            x = inputs[0]
+            s = self.ap(skip_tensor_in)
+            s = self.skip_conv(s)
+        else:
+            x = inputs
+
+        # compression convolution
+        if self.compression > 1:
+            x = self.compression_conv(x)
+            
+        if s is not None:
+            x = x+s
+
+        if self.pool:
+            x = self.mp(x)
+        # main conv and activation
+        x = self.main_conv(x)
+        if self.batchnorm:
+            x = self.bn(x)
+        x = self.act(x)
+
+        # attention conv
+        if self.attention:
+            if self.attention_lite:
+                att_in=self.att_pw_conv(x)
+            else:
+                att_in=x
+            y = self.att_act(self.att_conv(att_in))
+            x = x*y
+
+        return x
+
+        
+
 
 
 class TFDWConv(keras.layers.Layer):
@@ -173,21 +252,30 @@ class TFCrossConv(keras.layers.Layer):
 
 class TFConv2d(keras.layers.Layer):
     # Substitution for PyTorch nn.Conv2D
-    def __init__(self, c1, c2, k, s=1, g=1, bias=True, w=None):
+    def __init__(self, c1, c2, k, s=1, g=1, bias=True, w=None, padding='valid', groups=1):
         super().__init__()
         assert g == 1, "TF v2.2 Conv2D does not support 'groups' argument"
+        assert groups == 1, "TF v2.2 Conv2D does not support 'groups' argument"
+        self.pad = -1
+        if isinstance(padding, int):
+            self.pad = padding
+            padding = 'valid'
+            
+
         self.conv = keras.layers.Conv2D(filters=c2,
                                         kernel_size=k,
                                         strides=s,
-                                        padding='VALID',
+                                        padding=padding,
                                         use_bias=bias,
                                         kernel_initializer=keras.initializers.Constant(
                                             w.weight.permute(2, 3, 1, 0).numpy()),
                                         bias_initializer=keras.initializers.Constant(w.bias.numpy()) if bias else None)
 
     def call(self, inputs):
+        if not self.pad == -1:
+            pad = tf.constant([[0,0],[self.pad, self.pad],[self.pad, self.pad],[0,0]])
+            inputs = tf.pad(inputs,pad , mode='CONSTANT')
         return self.conv(inputs)
-
 
 class TFBottleneckCSP(keras.layers.Layer):
     # CSP Bottleneck https://github.com/WongKinYiu/CrossStagePartialNetworks
@@ -365,8 +453,8 @@ def parse_model(d, ch, model, imgsz):  # model_dict, input_channels(3)
         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
         if m in [
                 nn.Conv2d, Conv, DWConv, DWConvTranspose2d, Bottleneck, SPP, SPPF, MixConv2d, Focus, CrossConv,
-                BottleneckCSP, C3, C3x]:
-            c1, c2 = ch[f], args[0]
+                BottleneckCSP, C3, C3x, EPConv]:
+            c1, c2 = ch[f if not isinstance(f,list) else f[0]], args[0]
             c2 = make_divisible(c2 * gw, 8) if c2 != no else c2
 
             args = [c1, c2, *args[1:]]
@@ -511,6 +599,8 @@ def activations(act=nn.SiLU):
         return lambda x: keras.activations.relu(x, alpha=0.1)
     elif isinstance(act, nn.Hardswish):
         return lambda x: x * tf.nn.relu6(x + 3) * 0.166666667
+    elif isinstance(act, nn.Sigmoid):
+        return lambda x: keras.activations.sigmoid(x)
     elif isinstance(act, (nn.SiLU, SiLU)):
         return lambda x: keras.activations.swish(x)
     else:
