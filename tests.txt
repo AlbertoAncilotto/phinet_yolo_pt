@@ -186,7 +186,43 @@ as before with 1024 out/32
                 1.80 M params, 0.9 GFlops
                 23.2 mAP @ 10 ep
 
-totry
-    pool instead of stride
-    skip in neck blocks
-    add blocks
+185 with skip in last 2 head blocks
+                1.80 M params, 0.9 GFlops   / 480x480
+                23.3 mAP @ 10 ep
+                35.2 mAP @ 121 ep   /   32.9 mAP @ 121 ep
+                35.3 mAP @ 200 ep   /   34.5 mAP @ 200 ep
+                38.7 mAP @ 300 ep   /   36.1 mAP @ 300 ep
+
+185 w mp instead of stride
+                20.7 mAP @ 10 ep, 480
+                33.9 mAP @ 200 ep, 480
+
+185 w/ 2 more blocks, 480
+                1.87 M params, 1.0 GFlops
+                22.8 mAP @ 10 ep
+                36.7 mAP @ 200 ep
+                38.4 mAP @ 300 ep
+
+200 w/ 2 more blocks in head, 480
+                1.97 M params, 1.0 GFlops
+                23.2 mAP @ 10 ep
+                35.6 mAP @ 120 ep
+                37.2 mAP @ 200 ep
+                39.2 mAP @ 300 ep
+
+206 w/ 2 more blocks in head again
+                2.08 M params, 1.0 GFlops
+                22.7 mAP @ 10 ep
+
+200 w/ 512 SPPF
+                1.82 M params, 1.0 GFlops
+                22.8 mAP @ 10 ep
+
+verylite
+    14.6 mAP @ 300
+
+verylite + att
+    14.8 mAP @ 300
+
+verylite + skip
+    26K + 78.7M

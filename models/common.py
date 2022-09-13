@@ -123,12 +123,15 @@ class EPConv(nn.Module):
             x = x[0]
             s = self.ap(skip_tensor_in)
             s = self.skip_conv(s)
+        #     print(f'Skip shape {s.shape}')
+        # print(f'Input shape {x.shape}')
 
         # compression convolution
         if self.compression > 1:
             x = self.compression_conv(x)
             
         if s is not None:
+            # print(f'Tensor shape {x.shape}')
             x = x+s
 
         if self.pool:
