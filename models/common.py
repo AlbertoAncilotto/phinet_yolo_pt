@@ -155,6 +155,7 @@ class EPConv(nn.Module):
         if self.dropout_rate > 0:
             x = self.do(x)
 
+        # print(f'Output shape {x.shape} \n')
         return x
 
     #TODO implement fused conv

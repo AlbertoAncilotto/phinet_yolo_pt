@@ -225,4 +225,65 @@ verylite + att
     14.8 mAP @ 300
 
 verylite + skip
-    26K + 78.7M
+    26K + 79M
+    1.9 @ 10
+
+227 + att
+    44K + 96M
+    5.1 @ 10
+
+231 + more blocks
+    48K + 107M
+    2.6 @ 10
+
+231 160->256 last layer
+    64K + 113M
+    6.0 @ 10 
+
+239 + skip in neck
+    64K + 113M
+    5.8 @ 10
+
+239 + 2 neck
+    85K + 130M
+    5.6 @ 10
+
+239 + late skip on neck
+    64K + 113M
+    6.9 @ 10
+
+251 + upsample
+    64K + 179M
+    3 @ 10
+
+251 6->4 compr neck
+    76K + 122M
+    6.6 @ 10
+
+251 all 6 compr
+    52K + 100M
+    6.0 @ 10
+
+251 4 - 6 - 6
+    53K + 104M
+    6.1 @ 10
+
+tinyyolo on coco
+    6.05 / 8.5 maP
+
+xinet tinyyolo
+    3.2
+
+xinet tinyyolo head + yolo5 body  (screen _xinet_4)
+    1.96 MParams + 0.90 GMACC
+
+tiny xinet + before (screen _xinet)
+    1.27 MP + 0.67 GM
+    6.05 adam
+
+-------------------------------------
+206 retrain (batch 128)
+    36.8 @ 180
+
+272 w/ compression = 1 in first block
+    23.3 @ 10

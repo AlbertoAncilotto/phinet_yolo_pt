@@ -1,1 +1,2 @@
-CUDA_VISIBLE_DEVICES=0 python train.py --data coco.yaml --cfg yolov5ephi.yaml --batch-size 64 --weights '' --optimizer 'Adam'
+CUDA_VISIBLE_DEVICES=2 python train.py --data coco.yaml --cfg hub/yolov3-tiny-xinet.yaml --batch-size 64 --weights ''
+# CUDA_VISIBLE_DEVICES=0 python train.py --data coco.yaml  --cfg yolov5ephi_noc3.yaml --weights '' --batch-size 128
